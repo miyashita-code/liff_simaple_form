@@ -1,0 +1,60 @@
+// Google Sheets APIを使用する場合のAPI Route実装例
+// 使用する場合は、このファイルをroute.tsにリネームしてください
+
+import { NextRequest, NextResponse } from 'next/server'
+import { google } from 'googleapis'
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { userId, userName, choice } = body
+
+    if (!userId || !choice) {
+      return NextResponse.json(
+        { error: '必須項目が不足しています' },
+        { status: 400 }
+      )
+    }
+
+    // Google Service Account認証
+    const auth = new google.auth.JWT(
+      process.env.GSA_CLIENT_EMAIL,
+      undefined,
+      process.env.GSA_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      ['https://www.googleapis.com/auth/spreadsheets']
+    )
+
+    const sheets = google.sheets({ version: 'v4', auth })
+
+    // スプレッドシートに行を追加
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: 'シート1!A:D',
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values: [[
+          new Date().toISOString(),
+          userId,
+          userName || '不明',
+          choice
+        ]]
+      }
+    })
+
+    return NextResponse.json({ status: 'ok' })
+  } catch (error) {
+    console.error('Submit error:', error)
+    return NextResponse.json(
+      { error: '送信中にエラーが発生しました' },
+      { status: 500 }
+    )
+  }
+}
+
+// 必要な環境変数:
+// GSA_CLIENT_EMAIL: Service AccountのメールアドレスÏ
+// GSA_PRIVATE_KEY: Service Accountの秘密鍵
+// GOOGLE_SHEET_ID: スプレッドシートのID
+
+// 依存関係の追加が必要:
+// npm install googleapis
